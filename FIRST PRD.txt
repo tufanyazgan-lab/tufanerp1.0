@@ -1,0 +1,61 @@
+Ön Muhasebe ERP – PRD v1
+
+1. Genel Amaç
+
+Kullanıcıların web tabanlı ön muhasebe işlemlerini hızlıca yapabilmesi, firma hesabı açarak gelir–gider, fatura, cari hesap, kasa/banka kayıtlarını yönetebilmesi.
+
+2. Kullanıcı Kaydı
+	•	Kullanıcı firma adı, e-posta ve telefon ile kayıt olmalı.
+	•	Aynı e-posta veya telefonla ikinci kez kayıt yapılamamalı.
+	•	Şifre doğrulaması olmalı (password confirmation).
+	•	Kayıt olurken otomatik olarak firma kaydı oluşturulmalı ve kullanıcı bu firmaya bağlanmalı.
+
+3. Tablolar
+
+3.1 Companies
+	•	id, name, tax_number, email, phone, created_at, updated_at
+
+3.2 Users (Laravel default)
+	•	company_id (FK), name, email, phone, password
+
+3.3 Customers
+	•	company_id (FK)
+	•	name, tax_number, tax_office
+	•	email, phone
+	•	balance (decimal, default 0)
+	•	timestamps, soft delete
+
+3.4 Invoices
+	•	company_id (FK)
+	•	customer_id (FK)
+	•	series (default A)
+	•	seq_no
+	•	issue_date
+	•	currency (default TRY)
+	•	subtotal, vat, discount, total
+	•	timestamps, soft delete
+
+3.5 CashEntries
+	•	company_id (FK)
+	•	customer_id (nullable FK)
+	•	type (income / expense)
+	•	date
+	•	amount
+	•	account (KASA / BANKA)
+	•	note
+	•	timestamps
+
+4. Temel İşlevler
+	1.	Firma kaydı ve kullanıcı oluşturma
+	2.	Cari ekleme / düzenleme / silme
+	3.	Fatura kesme, listeleme, toplamlar
+	4.	Kasa/Banka gelir–gider kayıtları
+	5.	Basit dashboard kutuları (günlük satış, kasa bakiye, toplam borç vb.)
+
+5. Gelecek Geliştirmeler
+	•	PDF fatura çıktısı
+	•	Çoklu para birimi
+	•	Rapor ekranları
+	•	e-Fatura / e-Arşiv entegrasyonu
+	•	N8n üzerinden otomasyonlar
+	•	LLM destekli fiyat analizi
