@@ -12,8 +12,8 @@ Araç + mobil asansör + ev/ofis taşıma + genel/ticari yük + inşaat/tadilat 
 ## Geliştirme
 ```bash
 npm install
-npm run db:migrate   # Prisma migration + seed
-npm run dev           # http://localhost:7075
+npm run setup   # .env + veritabanı + seed (ilk kurulumda bir kez)
+npm run dev     # http://localhost:7075
 ```
 
 > 8080 portunu kullanma; bu proje için local port **7075** olarak belirlenmiştir.
