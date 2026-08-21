@@ -13,10 +13,10 @@ Araç + mobil asansör + ev/ofis taşıma + genel/ticari yük + inşaat/tadilat 
 ```bash
 npm install
 npm run db:migrate   # Prisma migration + seed
-npm run dev           # http://localhost:7070
+npm run dev           # http://localhost:7075
 ```
 
-> 8080 portunu kullanma; bu proje için local port **7070** olarak belirlenmiştir.
+> 8080 portunu kullanma; bu proje için local port **7075** olarak belirlenmiştir.
 
 ## Claude ile geliştirme
 `CLAUDE.md` projenin ana ürün/geliştirme talimatıdır. Değişiklik yapmadan önce onu oku.

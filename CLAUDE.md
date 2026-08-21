@@ -5,9 +5,9 @@ Bu dosya Claude Code / VS Code Claude için projenin ana geliştirme talimatıd�
 ## 1. Marka ve geliştirme ortamı
 - Marka/domain: `tasinmakistiyorum.com`
 - Müşteriye görünen alanlarda bu marka kullanılacak.
-- Local development portu: **7070**.
+- Local development portu: **7075**.
 - 8080 kullanma.
-- Local URL: `http://localhost:7070`
+- Local URL: `http://localhost:7075`
 
 ## 2. Ürünün amacı
 Tek işletmenin iki ayrı varlığını yöneten lojistik/taşıma sistemi:
