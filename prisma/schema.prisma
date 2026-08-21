@@ -1,0 +1,328 @@
+// tasinmakistiyorum.com — MVP schema
+// Dev: SQLite. Prod hedefi: Postgres/Supabase (provider + DATABASE_URL değişikliğiyle).
+// Enum yerine String kullanılan alanlar SQLite uyumluluğu için; geçerli değerler src/lib/domain.ts içinde.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs Job[]
+
+  @@map("customers")
+}
+
+// Bir talep/iş kaydı. Lead -> Quote -> Reservation -> Execution tek Job üzerinde
+// status alanıyla ilerler (CLAUDE.md #8 akışı). Durum geçmişi JobEvent'te.
+model Job {
+  id          String  @id @default(cuid())
+  code        String  @unique // müşteriye gösterilen kısa takip kodu
+  customerId  String
+  serviceType String // ELEVATOR_ONLY | TRUCK_ONLY | TRUCK_PLUS_ELEVATOR
+  jobType     String // HOME_MOVE | OFFICE_MOVE | PARTIAL_ITEMS | COMMERCIAL | CONSTRUCTION | RUBBLE | DOORS_WINDOWS | OTHER
+  status      String @default("NEW_REQUEST")
+
+  homeType         String? // 1+0 .. 5+2 | OTHER (ev/ofis akışı)
+  distanceKm       Float?
+  estimatedHours   Float?
+  elevatorSetups   Int     @default(0) // kaç adreste mobil asansör kurulumu
+  outOfCity        Boolean @default(false)
+  estimatedVolume  Float? // m3
+  estimatedWeight  Float? // kg
+  needsStaffReview Boolean @default(false) // ağır/hassas yük işareti
+  notes            String?
+
+  scheduledDate DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  addresses   JobAddress[]
+  rooms       Room[]
+  items       JobItem[]
+  photos      Photo[]
+  quotes      Quote[]
+  payments    Payment[]
+  events      JobEvent[]
+  assignments Assignment[]
+
+  @@map("jobs")
+}
+
+model JobAddress {
+  id               String  @id @default(cuid())
+  jobId            String
+  kind             String // PICKUP | DROPOFF
+  addressText      String
+  floor            Int     @default(0)
+  buildingElevator Boolean @default(false) // bina asansörü var mı
+  mobileElevator   Boolean @default(false) // bu adreste mobil asansör kurulacak mı
+  truckAccess      String? // bina önü / yanaşma notu
+  lat              Float?
+  lng              Float?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_addresses")
+}
+
+model Room {
+  id     String @id @default(cuid())
+  jobId  String
+  name   String
+  sortNo Int    @default(0)
+
+  job   Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  items JobItem[]
+
+  @@map("rooms")
+}
+
+// Yönetilebilir katalog: oda şablon eşyaları + ticari/inşaat/moloz hazır kalemleri + ekstra eşyalar
+model CatalogItem {
+  id           String  @id @default(cuid())
+  scope        String // ROOM_TEMPLATE | CARGO | EXTRA
+  groupKey     String // ROOM_TEMPLATE: oda şablon anahtarı (bedroom, living...); CARGO: kategori anahtarı; EXTRA: "extra"
+  name         String
+  defaultQty   Int     @default(1)
+  unit         String  @default("adet") // adet | paket | m2 | torba | kova | çuval | big bag | kg | koli
+  approxWeight Float? // kg / birim
+  active       Boolean @default(true)
+  sortNo       Int     @default(0)
+
+  @@map("item_catalog")
+}
+
+// Ev/ofis oda şablonları: hangi ev tipinde hangi odalar açılır
+model HomeTemplate {
+  id       String @id @default(cuid())
+  homeType String // 1+0, 1+1, 2+1, ...
+  roomKey  String // bedroom | living | kitchen | ...
+  roomName String
+  sortNo   Int    @default(0)
+
+  @@unique([homeType, roomKey])
+  @@map("home_templates")
+}
+
+model CargoCategory {
+  id     String  @id @default(cuid())
+  key    String  @unique
+  name   String
+  active Boolean @default(true)
+  sortNo Int     @default(0)
+
+  @@map("cargo_categories")
+}
+
+model JobItem {
+  id           String  @id @default(cuid())
+  jobId        String
+  roomId       String? // null: oda dışı (ekstra/ticari kalem)
+  categoryKey  String? // ticari yük kategorisi
+  name         String
+  qty          Float   @default(1)
+  unit         String  @default("adet")
+  dimensions   String?
+  approxWeight Float?
+  isCustom     Boolean @default(false)
+  fragile      Boolean @default(false)
+
+  job  Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  room Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  photos Photo[]
+
+  @@map("job_items")
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  jobId     String
+  jobItemId String?
+  kind      String // ITEM | FACADE | BEFORE | AFTER
+  dataUrl   String // MVP: base64 data URL; prod'da Storage URL
+  note      String?
+  createdAt DateTime @default(now())
+
+  job     Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobItem JobItem? @relation(fields: [jobItemId], references: [id], onDelete: SetNull)
+
+  @@map("photos")
+}
+
+model Tariff {
+  id     String  @id @default(cuid())
+  kind   String // TRUCK | ELEVATOR | COMBO
+  name   String
+  active Boolean @default(true)
+
+  // TRUCK
+  minFee        Float @default(0)
+  includedKm    Float @default(0)
+  perExtraKm    Float @default(0)
+  includedHours Float @default(0)
+  perExtraHour  Float @default(0)
+  perExtraTrip  Float @default(0)
+  waitingPerHour Float @default(0)
+  outOfCityMultiplier Float @default(1)
+
+  // ELEVATOR
+  setupFee       Float @default(0)
+  extraSetupFee  Float @default(0)
+  floorThreshold Int   @default(10) // bu katın üstü için ek ücret
+  perExtraFloor  Float @default(0)
+  rubbleSurcharge Float @default(0) // moloz/özel yük katsayısı değil, sabit ek
+
+  // COMBO
+  comboDiscount Float @default(0) // araç+asansör birleşik indirimi (TL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotes Quote[]
+
+  @@map("tariffs")
+}
+
+model Quote {
+  id         String   @id @default(cuid())
+  jobId      String
+  tariffId   String?
+  kind       String // ESTIMATE | FINAL
+  status     String   @default("DRAFT") // DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED
+  totalMin   Float // tahmini aralık alt
+  totalMax   Float // tahmini aralık üst (FINAL'de min==max)
+  currency   String   @default("TRY")
+  note       String?
+  createdBy  String? // operatör/admin adı
+  createdAt  DateTime @default(now())
+
+  job    Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tariff Tariff?     @relation(fields: [tariffId], references: [id])
+  lines  QuoteLine[]
+
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id       String @id @default(cuid())
+  quoteId  String
+  label    String
+  amount   Float
+  sortNo   Int    @default(0)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("quote_lines")
+}
+
+model Vehicle {
+  id     String  @id @default(cuid())
+  kind   String // TRUCK | ELEVATOR
+  name   String
+  plate  String  @unique
+  active Boolean @default(true)
+
+  assignments Assignment[]
+
+  @@map("vehicles")
+}
+
+model Operator {
+  id     String  @id @default(cuid())
+  name   String
+  phone  String  @unique
+  role   String  @default("operator") // operator | dispatcher | admin
+  active Boolean @default(true)
+
+  assignments Assignment[]
+
+  @@map("operators")
+}
+
+model Assignment {
+  id         String   @id @default(cuid())
+  jobId      String
+  vehicleId  String?
+  operatorId String?
+  date       DateTime
+  createdAt  DateTime @default(now())
+
+  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle?  @relation(fields: [vehicleId], references: [id])
+  operator Operator? @relation(fields: [operatorId], references: [id])
+
+  @@map("assignments")
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  jobId     String
+  method    String // CARD | TRANSFER
+  status    String   @default("PENDING") // PENDING | AUTHORIZED | PAID | FAILED | REFUNDED
+  amount    Float
+  currency  String   @default("TRY")
+  reference String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job    Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  events PaymentEvent[]
+
+  @@map("payments")
+}
+
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  paymentId String
+  type      String // CREATED | AUTHORIZED | CAPTURED | MANUAL_CONFIRMED | FAILED | REFUNDED
+  detail    String?
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_events")
+}
+
+// İş üzerindeki durum geçişleri + GPS/timestamp kayıtları
+model JobEvent {
+  id        String   @id @default(cuid())
+  jobId     String
+  type      String // STATUS_CHANGE | ARRIVED_GPS | EXTRA_SERVICE | NOTE
+  fromStatus String?
+  toStatus   String?
+  lat       Float?
+  lng       Float?
+  detail    String?
+  actor     String? // kim yaptı (operatör adı / system / customer)
+  createdAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_events")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String // Job | Quote | Tariff | Payment ...
+  entityId  String
+  action    String // create | update | delete | status_change | price_change
+  actor     String?
+  before    String? // JSON
+  after     String? // JSON
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
